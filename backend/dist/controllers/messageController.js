@@ -13,43 +13,42 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOnlineUsers = exports.addReaction = exports.sendMessage = exports.getMessages = void 0;
+const path_1 = __importDefault(require("path"));
 const Message_1 = __importDefault(require("../models/Message"));
 const User_1 = __importDefault(require("../models/User"));
 const app_1 = require("../app");
-const path_1 = __importDefault(require("path"));
 const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const messages = yield Message_1.default.find().populate('replyTo').sort({ timestamp: 1 });
+        const messages = yield Message_1.default.find()
+            .populate('replyTo')
+            .sort({ timestamp: 1 })
+            .lean();
         res.json(messages);
     }
-    catch (error) {
+    catch (err) {
+        console.error(err);
         res.status(500).json({ message: 'Server error' });
     }
 });
 exports.getMessages = getMessages;
 const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     const { text, type, replyTo } = req.body;
     const username = req.user.username;
     let audioUri;
     let audioDuration;
-    if (type === 'voice' && req.files) {
-        // Verificação mais segura para o arquivo de áudio
-        const audioFiles = req.files['audio'];
-        if (audioFiles) {
-            // Se for um array, pega o primeiro arquivo, senão pega o arquivo único
-            const audioFile = Array.isArray(audioFiles) ? audioFiles[0] : audioFiles;
-            if (audioFile && typeof audioFile === 'object' && 'mv' in audioFile) {
-                const uploadPath = path_1.default.join(__dirname, '../uploads', `${Date.now()}-${audioFile.name}`);
-                try {
-                    yield audioFile.mv(uploadPath);
-                    audioUri = `/uploads/${path_1.default.basename(uploadPath)}`;
-                    audioDuration = parseInt(req.body.audioDuration) || 0;
-                }
-                catch (uploadError) {
-                    console.error('Error uploading file:', uploadError);
-                    return res.status(500).json({ message: 'Error uploading audio file' });
-                }
-            }
+    if (type === 'voice' && ((_a = req.files) === null || _a === void 0 ? void 0 : _a.audio)) {
+        const file = Array.isArray(req.files.audio) ? req.files.audio[0] : req.files.audio;
+        const uploadPath = path_1.default.join(__dirname, '../uploads', `${Date.now()}-${file.name}`);
+        try {
+            yield file.mv(uploadPath);
+            const serverUrl = `${req.protocol}://${req.get('host')}`;
+            audioUri = `${serverUrl}/uploads/${path_1.default.basename(uploadPath)}`;
+            audioDuration = parseInt(req.body.audioDuration, 10) || 0;
+        }
+        catch (e) {
+            console.error(e);
+            return res.status(500).json({ message: 'Error uploading audio file' });
         }
     }
     try {
@@ -61,12 +60,12 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             audioDuration,
             replyTo,
         });
-        const populatedMessage = yield Message_1.default.findById(message._id).populate('replyTo');
-        app_1.io.emit('newMessage', populatedMessage);
-        res.status(201).json(populatedMessage);
+        const populated = yield Message_1.default.findById(message._id).populate('replyTo').lean();
+        app_1.io.emit('newMessage', populated);
+        res.status(201).json(populated);
     }
-    catch (error) {
-        console.error('Error creating message:', error);
+    catch (err) {
+        console.error(err);
         res.status(500).json({ message: 'Server error' });
     }
 });
@@ -76,26 +75,43 @@ const addReaction = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     const username = req.user.username;
     try {
         const message = yield Message_1.default.findById(messageId);
-        if (!message) {
+        if (!message)
             return res.status(404).json({ message: 'Message not found' });
+        const reactions = message.reactions && typeof message.reactions === 'object'
+            ? JSON.parse(JSON.stringify(message.reactions))
+            : {};
+        for (const [key, val] of Object.entries(reactions)) {
+            if (Array.isArray(val)) {
+                const filtered = val.filter((u) => u !== username);
+                if (filtered.length === 0) {
+                    delete reactions[key];
+                }
+                else {
+                    reactions[key] = filtered;
+                }
+            }
         }
-        // Trabalha diretamente com objeto em vez de Map
-        const reactions = message.reactions || {};
-        // Obtém o array de usuários para o emoji ou inicializa um array vazio
-        const users = reactions[emoji] || [];
-        // Adiciona username ao array se não estiver presente
-        if (!users.includes(username)) {
-            users.push(username);
-            reactions[emoji] = users;
+        const current = Array.isArray(reactions[emoji]) ? reactions[emoji] : [];
+        const idx = current.indexOf(username);
+        if (idx === -1) {
+            reactions[emoji] = [...current, username];
         }
-        // Atualiza a mensagem com as novas reações
-        yield message.updateOne({ reactions });
-        const updatedMessage = yield Message_1.default.findById(messageId).populate('replyTo');
-        app_1.io.emit('messageUpdated', updatedMessage);
-        res.json(updatedMessage);
+        else {
+            current.splice(idx, 1);
+            if (current.length === 0)
+                delete reactions[emoji];
+            else
+                reactions[emoji] = current;
+        }
+        message.reactions = reactions;
+        message.markModified('reactions');
+        yield message.save();
+        const updated = yield Message_1.default.findById(messageId).populate('replyTo').lean();
+        app_1.io.emit('messageUpdated', updated);
+        res.json(updated);
     }
-    catch (error) {
-        console.error('Error adding reaction:', error);
+    catch (err) {
+        console.error('Erro ao adicionar reação:', err);
         res.status(500).json({ message: 'Server error' });
     }
 });
@@ -105,8 +121,8 @@ const getOnlineUsers = (req, res) => __awaiter(void 0, void 0, void 0, function*
         const users = yield User_1.default.find({ online: true }).select('username online');
         res.json(users);
     }
-    catch (error) {
-        console.error('Error getting online users:', error);
+    catch (err) {
+        console.error(err);
         res.status(500).json({ message: 'Server error' });
     }
 });
