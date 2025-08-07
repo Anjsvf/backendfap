@@ -33,4 +33,10 @@ io.on('connection', socket => {
   });
 });
 
+app.get("/", (req, res) => {
+  res.json({
+    message: "Server is working",
+    status: "OK",
+  });
+});
 export default server;

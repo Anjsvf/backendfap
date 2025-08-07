@@ -29,4 +29,10 @@ exports.io.on('connection', socket => {
         console.log('User disconnected:', socket.id);
     });
 });
+app.get("/", (req, res) => {
+    res.json({
+        message: "Server is working",
+        status: "OK",
+    });
+});
 exports.default = server;
