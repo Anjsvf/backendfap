@@ -42,7 +42,10 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         const uploadPath = path_1.default.join(__dirname, '../uploads', `${Date.now()}-${file.name}`);
         try {
             yield file.mv(uploadPath);
-            const serverUrl = `${req.protocol}://${req.get('host')}`;
+            // 🚀 CORREÇÃO: Força HTTPS em produção
+            const serverUrl = process.env.NODE_ENV === 'production'
+                ? `https://${req.get('host')}`
+                : `${req.protocol}://${req.get('host')}`;
             audioUri = `${serverUrl}/uploads/${path_1.default.basename(uploadPath)}`;
             audioDuration = parseInt(req.body.audioDuration, 10) || 0;
         }

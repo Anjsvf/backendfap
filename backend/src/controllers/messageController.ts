@@ -1,4 +1,3 @@
-
 import { Request, Response } from 'express';
 import path from 'path';
 import { UploadedFile } from 'express-fileupload';
@@ -10,7 +9,6 @@ import { io } from '../app';
 interface RequestWithFiles extends Request {
   files?: { [key: string]: UploadedFile | UploadedFile[] } | null;
 }
-
 
 export const getMessages = async (req: Request, res: Response) => {
   try {
@@ -25,7 +23,6 @@ export const getMessages = async (req: Request, res: Response) => {
   }
 };
 
-
 export const sendMessage = async (req: RequestWithFiles, res: Response) => {
   const { text, type, replyTo } = req.body;
   const username = (req as any).user.username;
@@ -39,7 +36,12 @@ export const sendMessage = async (req: RequestWithFiles, res: Response) => {
 
     try {
       await file.mv(uploadPath);
-      const serverUrl = `${req.protocol}://${req.get('host')}`;
+      
+      // 🚀 CORREÇÃO: Força HTTPS em produção
+      const serverUrl = process.env.NODE_ENV === 'production' 
+        ? `https://${req.get('host')}` 
+        : `${req.protocol}://${req.get('host')}`;
+        
       audioUri = `${serverUrl}/uploads/${path.basename(uploadPath)}`;
       audioDuration = parseInt(req.body.audioDuration, 10) || 0;
     } catch (e) {
@@ -66,7 +68,6 @@ export const sendMessage = async (req: RequestWithFiles, res: Response) => {
   }
 };
 
-
 export const addReaction = async (req: Request, res: Response) => {
   const { messageId, emoji } = req.body;
   const username = (req as any).user.username;
@@ -75,12 +76,10 @@ export const addReaction = async (req: Request, res: Response) => {
     const message = await Message.findById(messageId);
     if (!message) return res.status(404).json({ message: 'Message not found' });
 
-   
     const reactions = message.reactions && typeof message.reactions === 'object'
       ? JSON.parse(JSON.stringify(message.reactions))
       : {};
 
-    
     for (const [key, val] of Object.entries(reactions)) {
       if (Array.isArray(val)) {
         const filtered = val.filter((u: string) => u !== username);
@@ -92,7 +91,6 @@ export const addReaction = async (req: Request, res: Response) => {
       }
     }
 
-  
     const current = Array.isArray(reactions[emoji]) ? reactions[emoji] : [];
     const idx = current.indexOf(username);
     if (idx === -1) {
