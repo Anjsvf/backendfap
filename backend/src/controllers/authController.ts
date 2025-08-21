@@ -16,8 +16,11 @@ export const register = async (req: Request, res: Response) => {
     return res.status(400).json({ message: 'Username must be between 3 and 20 characters' });
   }
 
-  if (!/^[a-zA-Z0-9]+$/.test(username)) {
-    return res.status(400).json({ message: 'Username must contain only letters and numbers' });
+  // Regex atualizada para aceitar letras (incluindo acentos), números e underscores
+  if (!/^[a-zA-Z0-9\u00C0-\u017F_]+$/.test(username)) {
+    return res.status(400).json({ 
+      message: 'Username must contain only letters (including accents), numbers, and underscores' 
+    });
   }
 
   const userExists = await User.findOne({ $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }] });

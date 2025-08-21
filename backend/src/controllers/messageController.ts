@@ -39,7 +39,7 @@ export const sendMessage = async (req: RequestWithFiles, res: Response) => {
       
       // 🚀 CORREÇÃO: Força HTTPS em produção
       const serverUrl = process.env.NODE_ENV === 'production' 
-        ? `https://${req.get('host')}` 
+        ? `http://${req.get('host')}` 
         : `${req.protocol}://${req.get('host')}`;
         
       audioUri = `${serverUrl}/uploads/${path.basename(uploadPath)}`;
