@@ -37,7 +37,7 @@ export const sendMessage = async (req: RequestWithFiles, res: Response) => {
     try {
       await file.mv(uploadPath);
       
-      // 🚀 CORREÇÃO: Força HTTPS em produção
+     
       const serverUrl = process.env.NODE_ENV === 'production' 
         ? `https://${req.get('host')}` 
         : `${req.protocol}://${req.get('host')}`;

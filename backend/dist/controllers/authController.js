@@ -12,11 +12,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logout = exports.login = exports.register = void 0;
+exports.logout = exports.resetPassword = exports.forgotPassword = exports.login = exports.resendVerificationCode = exports.verifyEmail = exports.register = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
+const Verification_1 = __importDefault(require("../models/Verification"));
+const emailService_1 = require("../services/emailService");
 const app_1 = require("../app");
+const generateVerificationCode = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
 const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -25,42 +30,142 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (username.length < 3 || username.length > 20) {
         return res.status(400).json({ message: 'Username must be between 3 and 20 characters' });
     }
-    // Regex atualizada para aceitar letras (incluindo acentos), números e underscores
     if (!/^[a-zA-Z0-9\u00C0-\u017F_]+$/.test(username)) {
         return res.status(400).json({
             message: 'Username must contain only letters (including accents), numbers, and underscores'
         });
     }
-    const userExists = yield User_1.default.findOne({ $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }] });
-    if (userExists) {
-        return res.status(400).json({ message: 'Username or email already taken' });
+    if (password.length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
-    const salt = yield bcryptjs_1.default.genSalt(10);
-    const hashedPassword = yield bcryptjs_1.default.hash(password, salt);
-    const user = yield User_1.default.create({
-        username,
-        email,
-        password: hashedPassword,
-        online: true,
-    });
-    if (user) {
-        app_1.io.emit('userStatus', { username: user.username, online: true });
+    try {
+        const userExists = yield User_1.default.findOne({
+            $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }]
+        });
+        if (userExists) {
+            return res.status(400).json({ message: 'Username or email already taken' });
+        }
+        const salt = yield bcryptjs_1.default.genSalt(10);
+        const hashedPassword = yield bcryptjs_1.default.hash(password, salt);
+        const user = yield User_1.default.create({
+            username,
+            email: email.toLowerCase(),
+            password: hashedPassword,
+            online: false,
+            emailVerified: false,
+        });
+        const verificationCode = generateVerificationCode();
+        yield Verification_1.default.create({
+            email: email.toLowerCase(),
+            code: verificationCode,
+            type: 'email_verification',
+        });
+        yield (0, emailService_1.sendVerificationEmail)(email, verificationCode, username);
         res.status(201).json({
+            message: 'User registered successfully. Please check your email for verification code.',
+            email: user.email,
+            needsVerification: true,
+        });
+    }
+    catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+exports.register = register;
+const verifyEmail = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { email, code } = req.body;
+    if (!email || !code) {
+        return res.status(400).json({ message: 'Email and code are required' });
+    }
+    try {
+        const verification = yield Verification_1.default.findOne({
+            email: email.toLowerCase(),
+            code,
+            type: 'email_verification',
+            expiresAt: { $gt: new Date() },
+        });
+        if (!verification) {
+            return res.status(400).json({ message: 'Invalid or expired verification code' });
+        }
+        const user = yield User_1.default.findOneAndUpdate({ email: email.toLowerCase() }, { emailVerified: true }, { new: true });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        yield Verification_1.default.deleteMany({ email: email.toLowerCase(), type: 'email_verification' });
+        res.json({
+            message: 'Email verified successfully',
             _id: user._id,
             username: user.username,
             email: user.email,
             token: generateToken(user._id),
         });
     }
-    else {
-        res.status(400).json({ message: 'Invalid user data' });
+    catch (error) {
+        console.error('Email verification error:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
-exports.register = register;
+exports.verifyEmail = verifyEmail;
+const resendVerificationCode = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { email, type } = req.body;
+    if (!email || !type) {
+        return res.status(400).json({ message: 'Email and type are required' });
+    }
+    try {
+        const user = yield User_1.default.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        if (type === 'email_verification' && user.emailVerified) {
+            return res.status(400).json({ message: 'Email already verified' });
+        }
+        yield Verification_1.default.deleteMany({ email: email.toLowerCase(), type });
+        const verificationCode = generateVerificationCode();
+        yield Verification_1.default.create({
+            email: email.toLowerCase(),
+            code: verificationCode,
+            type,
+        });
+        if (type === 'email_verification') {
+            yield (0, emailService_1.sendVerificationEmail)(email, verificationCode, user.username);
+        }
+        else {
+            yield (0, emailService_1.sendPasswordResetEmail)(email, verificationCode, user.username);
+        }
+        res.json({ message: 'Verification code sent successfully' });
+    }
+    catch (error) {
+        console.error('Resend code error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+exports.resendVerificationCode = resendVerificationCode;
 const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, password } = req.body;
-    const user = yield User_1.default.findOne({ email: email.toLowerCase() });
-    if (user && (yield bcryptjs_1.default.compare(password, user.password))) {
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required' });
+    }
+    try {
+        const user = yield User_1.default.findOne({ email: email.toLowerCase() });
+        if (!user || !(yield bcryptjs_1.default.compare(password, user.password))) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+        if (!user.emailVerified) {
+            const verificationCode = generateVerificationCode();
+            yield Verification_1.default.deleteMany({ email: email.toLowerCase(), type: 'email_verification' });
+            yield Verification_1.default.create({
+                email: email.toLowerCase(),
+                code: verificationCode,
+                type: 'email_verification',
+            });
+            yield (0, emailService_1.sendVerificationEmail)(email, verificationCode, user.username);
+            return res.status(403).json({
+                message: 'Email not verified. A new verification code has been sent to your email.',
+                needsVerification: true,
+                email: user.email,
+            });
+        }
         yield User_1.default.findByIdAndUpdate(user._id, { online: true });
         app_1.io.emit('userStatus', { username: user.username, online: true });
         res.json({
@@ -70,20 +175,89 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             token: generateToken(user._id),
         });
     }
-    else {
-        res.status(401).json({ message: 'Invalid email or password' });
+    catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 exports.login = login;
-const logout = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const user = yield User_1.default.findById(req.body.userId);
-    if (user) {
-        yield User_1.default.findByIdAndUpdate(req.body.userId, { online: false });
-        app_1.io.emit('userStatus', { username: user.username, online: false });
-        res.json({ message: 'Logged out successfully' });
+const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ message: 'Email is required' });
     }
-    else {
-        res.status(404).json({ message: 'User not found' });
+    try {
+        const user = yield User_1.default.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            // Por segurança, não revelamos se o usuário existe ou não
+            return res.json({ message: 'If this email exists, a password reset code has been sent.' });
+        }
+        // Remover códigos anteriores
+        yield Verification_1.default.deleteMany({ email: email.toLowerCase(), type: 'password_reset' });
+        const resetCode = generateVerificationCode();
+        yield Verification_1.default.create({
+            email: email.toLowerCase(),
+            code: resetCode,
+            type: 'password_reset',
+        });
+        yield (0, emailService_1.sendPasswordResetEmail)(email, resetCode, user.username);
+        res.json({ message: 'If this email exists, a password reset code has been sent.' });
+    }
+    catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+exports.forgotPassword = forgotPassword;
+const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) {
+        return res.status(400).json({ message: 'Email, code, and new password are required' });
+    }
+    if (newPassword.length < 6) {
+        return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+    try {
+        const verification = yield Verification_1.default.findOne({
+            email: email.toLowerCase(),
+            code,
+            type: 'password_reset',
+            expiresAt: { $gt: new Date() },
+        });
+        if (!verification) {
+            return res.status(400).json({ message: 'Invalid or expired reset code' });
+        }
+        const salt = yield bcryptjs_1.default.genSalt(10);
+        const hashedPassword = yield bcryptjs_1.default.hash(newPassword, salt);
+        const user = yield User_1.default.findOneAndUpdate({ email: email.toLowerCase() }, { password: hashedPassword }, { new: true });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        // Remover códigos de reset usados
+        yield Verification_1.default.deleteMany({ email: email.toLowerCase(), type: 'password_reset' });
+        res.json({ message: 'Password reset successfully' });
+    }
+    catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+exports.resetPassword = resetPassword;
+const logout = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const user = yield User_1.default.findById(req.body.userId);
+        if (user) {
+            yield User_1.default.findByIdAndUpdate(req.body.userId, { online: false });
+            app_1.io.emit('userStatus', { username: user.username, online: false });
+            res.json({ message: 'Logged out successfully' });
+        }
+        else {
+            res.status(404).json({ message: 'User not found' });
+        }
+    }
+    catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 exports.logout = logout;

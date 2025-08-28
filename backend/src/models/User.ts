@@ -1,3 +1,4 @@
+
 import mongoose, { Schema } from 'mongoose';
 import { User } from '../types';
 
@@ -25,6 +26,10 @@ const userSchema = new Schema<User>({
     minlength: 6,
   },
   online: {
+    type: Boolean,
+    default: false,
+  },
+  emailVerified: { 
     type: Boolean,
     default: false,
   },

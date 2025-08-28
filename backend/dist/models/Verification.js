@@ -24,40 +24,32 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const userSchema = new mongoose_1.Schema({
-    username: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        minlength: 3,
-        maxlength: 20,
-        match: [/^[a-zA-Z0-9\u00C0-\u017F_]+$/, 'Username must contain only letters (including accents), numbers, and underscores'],
-    },
+const verificationSchema = new mongoose_1.Schema({
     email: {
         type: String,
         required: true,
-        unique: true,
-        trim: true,
         lowercase: true,
-        match: [/^\S+@\S+\.\S+$/, 'Please use a valid email address'],
+        trim: true,
     },
-    password: {
+    code: {
         type: String,
         required: true,
-        minlength: 6,
     },
-    online: {
-        type: Boolean,
-        default: false,
+    type: {
+        type: String,
+        enum: ['email_verification', 'password_reset'],
+        required: true,
     },
-    emailVerified: {
-        type: Boolean,
-        default: false,
+    expiresAt: {
+        type: Date,
+        required: true,
+        default: () => new Date(Date.now() + 10 * 60 * 1000), // 10 minutos
+        index: { expireAfterSeconds: 0 },
     },
     createdAt: {
         type: Date,
         default: Date.now,
     },
 });
-exports.default = mongoose_1.default.model('User', userSchema);
+verificationSchema.index({ email: 1, type: 1 });
+exports.default = mongoose_1.default.model('Verification', verificationSchema);
