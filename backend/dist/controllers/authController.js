@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logout = exports.resetPassword = exports.forgotPassword = exports.login = exports.resendVerificationCode = exports.verifyEmail = exports.register = void 0;
+exports.logout = exports.resetPassword = exports.forgotPassword = exports.login = exports.resendVerificationCode = exports.verifyEmail = exports.checkUsername = exports.register = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
@@ -40,10 +40,10 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
     try {
         const userExists = yield User_1.default.findOne({
-            $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }]
+            $or: [{ username }, { email: email.toLowerCase() }]
         });
         if (userExists) {
-            return res.status(400).json({ message: 'Username or email already taken' });
+            return res.status(400).json({ message: 'Email já existe' });
         }
         const salt = yield bcryptjs_1.default.genSalt(10);
         const hashedPassword = yield bcryptjs_1.default.hash(password, salt);
@@ -69,14 +69,53 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
     catch (error) {
         console.error('Registration error:', error);
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+            return res.status(400).json({ message: 'Username already taken' });
+        }
         res.status(500).json({ message: 'Internal server error' });
     }
 });
 exports.register = register;
+const checkUsername = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { username } = req.query;
+    if (!username || typeof username !== 'string') {
+        return res.status(400).json({ message: 'Username is required' });
+    }
+    if (username.length < 3 || username.length > 20) {
+        return res.status(400).json({
+            available: false,
+            message: 'O nome de usuário deve ter entre 3 e 20 caracteres'
+        });
+    }
+    if (!/^[a-zA-Z0-9\u00C0-\u017F_]+$/.test(username)) {
+        return res.status(400).json({
+            available: false,
+            message: 'O nome de usuário deve conter apenas letras (incluindo acentos), números e _'
+        });
+    }
+    try {
+        const userExists = yield User_1.default.findOne({ username });
+        if (userExists) {
+            return res.json({
+                available: false,
+                message: 'Nome de usuário já está em uso'
+            });
+        }
+        res.json({
+            available: true,
+            message: 'Nome de usuário disponível.'
+        });
+    }
+    catch (error) {
+        console.error('Username check error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+exports.checkUsername = checkUsername;
 const verifyEmail = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, code } = req.body;
     if (!email || !code) {
-        return res.status(400).json({ message: 'Email and code are required' });
+        return res.status(400).json({ message: 'E-mail e código são obrigatórios.' });
     }
     try {
         const verification = yield Verification_1.default.findOne({
@@ -189,10 +228,8 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
     try {
         const user = yield User_1.default.findOne({ email: email.toLowerCase() });
         if (!user) {
-            // Por segurança, não revelamos se o usuário existe ou não
             return res.json({ message: 'If this email exists, a password reset code has been sent.' });
         }
-        // Remover códigos anteriores
         yield Verification_1.default.deleteMany({ email: email.toLowerCase(), type: 'password_reset' });
         const resetCode = generateVerificationCode();
         yield Verification_1.default.create({
@@ -233,7 +270,6 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        // Remover códigos de reset usados
         yield Verification_1.default.deleteMany({ email: email.toLowerCase(), type: 'password_reset' });
         res.json({ message: 'Password reset successfully' });
     }

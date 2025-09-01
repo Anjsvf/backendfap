@@ -7,6 +7,7 @@ export interface User {
   online: boolean;
   emailVerified: boolean; 
   createdAt: Date;
+  
 }
 
 export interface Message {

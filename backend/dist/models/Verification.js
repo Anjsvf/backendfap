@@ -43,7 +43,7 @@ const verificationSchema = new mongoose_1.Schema({
     expiresAt: {
         type: Date,
         required: true,
-        default: () => new Date(Date.now() + 10 * 60 * 1000), // 10 minutos
+        default: () => new Date(Date.now() + 10 * 60 * 1000),
         index: { expireAfterSeconds: 0 },
     },
     createdAt: {

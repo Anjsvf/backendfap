@@ -1,4 +1,3 @@
-
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -7,7 +6,6 @@ import Verification from '../models/Verification';
 import { RegisterInput, LoginInput, VerifyEmailInput, ResendCodeInput, ForgotPasswordInput, ResetPasswordInput } from '../types';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService';
 import { io } from '../app';
-
 
 const generateVerificationCode = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -36,11 +34,11 @@ export const register = async (req: Request, res: Response) => {
 
   try {
     const userExists = await User.findOne({ 
-      $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }] 
+      $or: [{ username }, { email: email.toLowerCase() }] 
     });
     
     if (userExists) {
-      return res.status(400).json({ message: 'Username or email already taken' });
+      return res.status(400).json({ message: 'Email já existe' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -54,7 +52,6 @@ export const register = async (req: Request, res: Response) => {
       emailVerified: false,
     });
 
-   
     const verificationCode = generateVerificationCode();
     
     await Verification.create({
@@ -70,8 +67,55 @@ export const register = async (req: Request, res: Response) => {
       email: user.email,
       needsVerification: true,
     });
-  } catch (error) {
+  } catch (error: unknown) { 
     console.error('Registration error:', error);
+    
+   
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+      return res.status(400).json({ message: 'Username already taken' });
+    }
+
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const checkUsername = async (req: Request, res: Response) => {
+  const { username } = req.query;
+
+  if (!username || typeof username !== 'string') {
+    return res.status(400).json({ message: 'Username is required' });
+  }
+
+  if (username.length < 3 || username.length > 20) {
+    return res.status(400).json({ 
+      available: false,
+      message: 'O nome de usuário deve ter entre 3 e 20 caracteres' 
+    });
+  }
+
+  if (!/^[a-zA-Z0-9\u00C0-\u017F_]+$/.test(username)) {
+    return res.status(400).json({ 
+      available: false,
+      message: 'O nome de usuário deve conter apenas letras (incluindo acentos), números e _' 
+    });
+  }
+
+  try {
+    const userExists = await User.findOne({ username });
+
+    if (userExists) {
+      return res.json({
+        available: false,
+        message: 'Nome de usuário já está em uso'
+      });
+    }
+
+    res.json({
+      available: true,
+      message: 'Nome de usuário disponível.'
+    });
+  } catch (error) {
+    console.error('Username check error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
@@ -80,7 +124,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
   const { email, code }: VerifyEmailInput = req.body;
 
   if (!email || !code) {
-    return res.status(400).json({ message: 'Email and code are required' });
+    return res.status(400).json({ message: 'E-mail e código são obrigatórios.' });
   }
 
   try {
@@ -105,7 +149,6 @@ export const verifyEmail = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-  
     await Verification.deleteMany({ email: email.toLowerCase(), type: 'email_verification' });
 
     res.json({
@@ -138,7 +181,6 @@ export const resendVerificationCode = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Email already verified' });
     }
 
-   
     await Verification.deleteMany({ email: email.toLowerCase(), type });
 
     const verificationCode = generateVerificationCode();
@@ -177,7 +219,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!user.emailVerified) {
-   
+    
       const verificationCode = generateVerificationCode();
       
       await Verification.deleteMany({ email: email.toLowerCase(), type: 'email_verification' });
@@ -222,11 +264,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     
     if (!user) {
-      // Por segurança, não revelamos se o usuário existe ou não
       return res.json({ message: 'If this email exists, a password reset code has been sent.' });
     }
 
-    // Remover códigos anteriores
     await Verification.deleteMany({ email: email.toLowerCase(), type: 'password_reset' });
 
     const resetCode = generateVerificationCode();
@@ -282,7 +322,6 @@ export const resetPassword = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Remover códigos de reset usados
     await Verification.deleteMany({ email: email.toLowerCase(), type: 'password_reset' });
 
     res.json({ message: 'Password reset successfully' });

@@ -1,4 +1,4 @@
-// routes/authRoutes.ts (ATUALIZADO)
+
 import express from 'express';
 import { 
   register, 
@@ -7,7 +7,8 @@ import {
   verifyEmail, 
   resendVerificationCode, 
   forgotPassword, 
-  resetPassword 
+  resetPassword ,
+  checkUsername
 } from '../controllers/authController';
 
 const router = express.Router();
@@ -22,5 +23,5 @@ router.post('/verify-email', verifyEmail);
 router.post('/resend-code', resendVerificationCode);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
-
+router.get('/check-username', checkUsername);
 export default router;

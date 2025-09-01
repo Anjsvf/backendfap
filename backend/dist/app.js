@@ -19,7 +19,7 @@ exports.io = new socket_io_1.Server(server, {
         origin: process.env.CLIENT_URL || '*',
         methods: ['GET', 'POST']
     },
-    transports: ['websocket', 'polling'], // ✅ Fallback
+    transports: ['websocket', 'polling'],
 });
 app.use((0, cors_1.default)({
     origin: process.env.CLIENT_URL || '*',
@@ -27,10 +27,9 @@ app.use((0, cors_1.default)({
 }));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use((0, express_fileupload_1.default)({
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+    limits: { fileSize: 10 * 1024 * 1024 },
     abortOnLimit: true,
 }));
-// ✅ Servir arquivos estáticos com headers corretos
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads'), {
     setHeaders: (res, filepath) => {
         if (filepath.endsWith('.m4a') || filepath.endsWith('.mp3')) {
@@ -40,7 +39,6 @@ app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'upl
 }));
 app.use('/api/auth', authRoutes_1.default);
 app.use('/api', messageRoutes_1.default);
-// ✅ CONTROLE DE USUÁRIOS ONLINE MELHORADO
 const onlineUsers = new Map();
 exports.io.on('connection', (socket) => {
     console.log('🔌 Usuário conectado:', socket.id);
@@ -55,13 +53,10 @@ exports.io.on('connection', (socket) => {
             lastPing: new Date(),
         });
         console.log(`👤 ${username} entrou no chat`);
-        // ✅ Enviar lista atualizada
         const userList = Array.from(new Set(Array.from(onlineUsers.values()).map(u => u.username)));
         exports.io.emit('onlineUsers', userList);
-        // ✅ Enviar confirmação de conexão
         socket.emit('connected', { username, timestamp: new Date() });
     });
-    // ✅ Heartbeat para manter conexão ativa
     socket.on('ping', () => {
         const user = onlineUsers.get(socket.id);
         if (user) {
@@ -74,24 +69,21 @@ exports.io.on('connection', (socket) => {
         if (user) {
             onlineUsers.delete(socket.id);
             console.log(`🚪 ${user.username} saiu do chat`);
-            // ✅ Atualizar lista após saída
             const userList = Array.from(new Set(Array.from(onlineUsers.values()).map(u => u.username)));
             exports.io.emit('onlineUsers', userList);
         }
     });
-    // ✅ Limpeza periódica de conexões "fantasma"
     setInterval(() => {
         const now = new Date();
-        const timeout = 5 * 60 * 1000; // 5 minutos
+        const timeout = 5 * 60 * 1000;
         for (const [socketId, user] of onlineUsers.entries()) {
             if (now.getTime() - user.lastPing.getTime() > timeout) {
                 console.log(`🧹 Removendo usuário inativo: ${user.username}`);
                 onlineUsers.delete(socketId);
             }
         }
-    }, 60000); // Verificar a cada minuto
+    }, 60000);
 });
-// ✅ Health check melhorado
 app.get('/', (req, res) => {
     res.json({
         message: 'Chat Server Online',
@@ -100,7 +92,6 @@ app.get('/', (req, res) => {
         onlineUsers: onlineUsers.size,
     });
 });
-// ✅ Endpoint para debug
 app.get('/debug/users', (req, res) => {
     const users = Array.from(onlineUsers.entries()).map(([socketId, user]) => ({
         socketId,
