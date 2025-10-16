@@ -19,7 +19,13 @@ const User_1 = __importDefault(require("../models/User"));
 const app_1 = require("../app");
 const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const messages = yield Message_1.default.find()
+        let query = {};
+        const since = req.query.since;
+        if (since) {
+            const sinceDate = new Date(since);
+            query = { timestamp: { $gt: sinceDate } };
+        }
+        const messages = yield Message_1.default.find(query)
             .populate('replyTo')
             .sort({ timestamp: 1 })
             .lean();

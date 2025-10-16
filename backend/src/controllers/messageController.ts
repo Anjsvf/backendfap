@@ -12,7 +12,14 @@ interface RequestWithFiles extends Request {
 
 export const getMessages = async (req: Request, res: Response) => {
   try {
-    const messages = await Message.find()
+    let query = {};
+    const since = req.query.since as string;
+    if (since) {
+      const sinceDate = new Date(since);
+      query = { timestamp: { $gt: sinceDate } };
+    }
+
+    const messages = await Message.find(query)
       .populate('replyTo')
       .sort({ timestamp: 1 })
       .lean(); 
