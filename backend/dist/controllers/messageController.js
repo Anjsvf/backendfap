@@ -68,9 +68,13 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             audioDuration,
             replyTo,
         });
-        const populated = yield Message_1.default.findById(message._id).populate('replyTo').lean();
-        app_1.io.emit('newMessage', populated);
-        res.status(201).json(populated);
+        //  FIX: Restaura populate SÓ pro emit (frontend precisa do objeto completo pra real-time)
+        const populatedForEmit = yield Message_1.default.findById(message._id).populate('replyTo').lean();
+        console.time('broadcast-newMessage');
+        app_1.io.emit('newMessage', populatedForEmit);
+        console.timeEnd('broadcast-newMessage');
+        // res.json sem populate (leve pra API)
+        res.status(201).json(message.toObject());
     }
     catch (err) {
         console.error(err);
@@ -88,6 +92,7 @@ const addReaction = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         const reactions = message.reactions && typeof message.reactions === 'object'
             ? JSON.parse(JSON.stringify(message.reactions))
             : {};
+        // FIX: Limpa reações antigas do usuário (pra toggle)
         for (const [key, val] of Object.entries(reactions)) {
             if (Array.isArray(val)) {
                 const filtered = val.filter((u) => u !== username);
@@ -114,9 +119,12 @@ const addReaction = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         message.reactions = reactions;
         message.markModified('reactions');
         yield message.save();
-        const updated = yield Message_1.default.findById(messageId).populate('replyTo').lean();
-        app_1.io.emit('messageUpdated', updated);
-        res.json(updated);
+        const populatedForEmit = yield Message_1.default.findById(messageId).populate('replyTo').lean();
+        console.time('broadcast-messageUpdated');
+        app_1.io.emit('messageUpdated', populatedForEmit);
+        console.timeEnd('broadcast-messageUpdated');
+        // res.json sem populate (leve pra API)
+        res.json(message.toObject());
     }
     catch (err) {
         console.error('Erro ao adicionar reação:', err);

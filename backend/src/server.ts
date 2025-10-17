@@ -15,7 +15,7 @@ connectDB()
       
       // Inicia o serviço de limpeza automática
       messageCleanupService.start();
-      console.log('🕐 Serviço de limpeza de mensagens iniciado');
+      console.log('Serviço de limpeza de mensagens iniciado');
     });
   })
   .catch((err) => {
@@ -28,7 +28,7 @@ process.on('SIGTERM', () => {
   console.log('⚠️ SIGTERM recebido, encerrando servidor...');
   messageCleanupService.stop();
   server.close(() => {
-    console.log('🛑 Servidor encerrado com sucesso');
+    console.log('Servidor encerrado com sucesso');
     process.exit(0);
   });
 });

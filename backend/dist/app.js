@@ -19,7 +19,10 @@ exports.io = new socket_io_1.Server(server, {
         origin: process.env.CLIENT_URL || '*',
         methods: ['GET', 'POST']
     },
-    transports: ['websocket', 'polling'],
+    transports: ['websocket'], // FIX: Force websocket (polling fallback automático)
+    pingInterval: 10000, //  FIX: 10s ping pra detectar delays
+    pingTimeout: 5000, // FIX: 5s timeout
+    maxHttpBufferSize: 1e6, //  FIX: Pra msgs grandes
 });
 app.use((0, cors_1.default)({
     origin: process.env.CLIENT_URL || '*',

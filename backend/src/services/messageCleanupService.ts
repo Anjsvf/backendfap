@@ -11,7 +11,7 @@ export class MessageCleanupService {
       await this.cleanupOldMessages();
     });
 
-    console.log('🕐 Serviço de limpeza automática iniciado (diário às 00:00)');
+    console.log(' Serviço de limpeza automática iniciado (diário às 00:00)');
     
     // Executa uma limpeza imediatamente ao iniciar
     this.cleanupOldMessages();
@@ -36,7 +36,7 @@ export class MessageCleanupService {
         });
       }
     } catch (error) {
-      console.error('❌ Erro na limpeza automática:', error);
+      console.error(' Erro na limpeza automática:', error);
     }
   }
 

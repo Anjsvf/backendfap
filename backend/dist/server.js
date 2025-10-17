@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 5000;
         console.log(`📧 SMTP_HOST: ${process.env.SMTP_HOST}`);
         // Inicia o serviço de limpeza automática
         messageCleanupService_1.messageCleanupService.start();
-        console.log('🕐 Serviço de limpeza de mensagens iniciado');
+        console.log('Serviço de limpeza de mensagens iniciado');
     });
 })
     .catch((err) => {
@@ -28,7 +28,7 @@ process.on('SIGTERM', () => {
     console.log('⚠️ SIGTERM recebido, encerrando servidor...');
     messageCleanupService_1.messageCleanupService.stop();
     app_1.default.close(() => {
-        console.log('🛑 Servidor encerrado com sucesso');
+        console.log('Servidor encerrado com sucesso');
         process.exit(0);
     });
 });
