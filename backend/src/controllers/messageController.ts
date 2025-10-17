@@ -14,15 +14,20 @@ export const getMessages = async (req: Request, res: Response) => {
   try {
     let query = {};
     const since = req.query.since as string;
+    const limit = parseInt(req.query.limit as string) || 50; // ✅ FIX: Default 50
+
     if (since) {
       const sinceDate = new Date(since);
-      query = { timestamp: { $gt: sinceDate } };
+      // ✅ FIX: Usa $gte (maior ou igual) pra incluir a última msg (evita gaps)
+      query = { timestamp: { $gte: sinceDate } };
     }
 
+    // ✅ FIX: REMOVE populate (leve pra API, só populado no emit real-time)
     const messages = await Message.find(query)
-      .populate('replyTo')
       .sort({ timestamp: 1 })
+      .limit(limit) // ✅ FIX: Aplica limit
       .lean(); 
+    
     res.json(messages);
   } catch (err) {
     console.error(err);
@@ -66,13 +71,11 @@ export const sendMessage = async (req: RequestWithFiles, res: Response) => {
       replyTo,
     });
     
-    //  FIX: Restaura populate SÓ pro emit (frontend precisa do objeto completo pra real-time)
+    // ✅ Populate SÓ pro emit (real-time precisa do objeto)
     const populatedForEmit = await Message.findById(message._id).populate('replyTo').lean();
-    console.time('broadcast-newMessage');
     io.emit('newMessage', populatedForEmit);
-    console.timeEnd('broadcast-newMessage');
 
-    // res.json sem populate (leve pra API)
+    // ✅ res.json SEM populate (leve pra API)
     res.status(201).json(message.toObject());
   } catch (err) {
     console.error(err);
@@ -92,7 +95,7 @@ export const addReaction = async (req: Request, res: Response) => {
       ? JSON.parse(JSON.stringify(message.reactions))
       : {};
 
-    // FIX: Limpa reações antigas do usuário (pra toggle)
+    // ✅ Limpa reações antigas do usuário (toggle)
     for (const [key, val] of Object.entries(reactions)) {
       if (Array.isArray(val)) {
         const filtered = val.filter((u: string) => u !== username);
@@ -118,13 +121,11 @@ export const addReaction = async (req: Request, res: Response) => {
     message.markModified('reactions');
     await message.save();
 
-   
+    // ✅ Populate SÓ pro emit (real-time precisa do objeto)
     const populatedForEmit = await Message.findById(messageId).populate('replyTo').lean();
-    console.time('broadcast-messageUpdated');
     io.emit('messageUpdated', populatedForEmit);
-    console.timeEnd('broadcast-messageUpdated');
     
-    // res.json sem populate (leve pra API)
+    // ✅ res.json SEM populate (leve pra API)
     res.json(message.toObject());
   } catch (err) {
     console.error('Erro ao adicionar reação:', err);

@@ -43,7 +43,7 @@ export const register = async (req: Request, res: Response) => {
       email: email.toLowerCase(),
       password: hashedPassword,
       online: false,
-      emailVerified: true, // Definido como true por padrão sem verificação
+      emailVerified: true, 
     });
 
     // Automaticamente faz login após registro

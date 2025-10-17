@@ -21,13 +21,16 @@ const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     try {
         let query = {};
         const since = req.query.since;
+        const limit = parseInt(req.query.limit) || 50; // ✅ FIX: Default 50
         if (since) {
             const sinceDate = new Date(since);
-            query = { timestamp: { $gt: sinceDate } };
+            // ✅ FIX: Usa $gte (maior ou igual) pra incluir a última msg (evita gaps)
+            query = { timestamp: { $gte: sinceDate } };
         }
+        // ✅ FIX: REMOVE populate (leve pra API, só populado no emit real-time)
         const messages = yield Message_1.default.find(query)
-            .populate('replyTo')
             .sort({ timestamp: 1 })
+            .limit(limit) // ✅ FIX: Aplica limit
             .lean();
         res.json(messages);
     }
@@ -68,12 +71,10 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             audioDuration,
             replyTo,
         });
-        //  FIX: Restaura populate SÓ pro emit (frontend precisa do objeto completo pra real-time)
+        // ✅ Populate SÓ pro emit (real-time precisa do objeto)
         const populatedForEmit = yield Message_1.default.findById(message._id).populate('replyTo').lean();
-        console.time('broadcast-newMessage');
         app_1.io.emit('newMessage', populatedForEmit);
-        console.timeEnd('broadcast-newMessage');
-        // res.json sem populate (leve pra API)
+        // ✅ res.json SEM populate (leve pra API)
         res.status(201).json(message.toObject());
     }
     catch (err) {
@@ -92,7 +93,7 @@ const addReaction = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         const reactions = message.reactions && typeof message.reactions === 'object'
             ? JSON.parse(JSON.stringify(message.reactions))
             : {};
-        // FIX: Limpa reações antigas do usuário (pra toggle)
+        // ✅ Limpa reações antigas do usuário (toggle)
         for (const [key, val] of Object.entries(reactions)) {
             if (Array.isArray(val)) {
                 const filtered = val.filter((u) => u !== username);
@@ -119,11 +120,10 @@ const addReaction = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         message.reactions = reactions;
         message.markModified('reactions');
         yield message.save();
+        // ✅ Populate SÓ pro emit (real-time precisa do objeto)
         const populatedForEmit = yield Message_1.default.findById(messageId).populate('replyTo').lean();
-        console.time('broadcast-messageUpdated');
         app_1.io.emit('messageUpdated', populatedForEmit);
-        console.timeEnd('broadcast-messageUpdated');
-        // res.json sem populate (leve pra API)
+        // ✅ res.json SEM populate (leve pra API)
         res.json(message.toObject());
     }
     catch (err) {
