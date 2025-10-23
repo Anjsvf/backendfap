@@ -1,6 +1,8 @@
+
 import { Request, Response } from 'express';
 import path from 'path';
 import { UploadedFile } from 'express-fileupload';
+import cloudinary from 'cloudinary';
 
 import Message from '../models/Message';
 import User from '../models/User';
@@ -14,18 +16,18 @@ export const getMessages = async (req: Request, res: Response) => {
   try {
     let query = {};
     const since = req.query.since as string;
-    const limit = parseInt(req.query.limit as string) || 50; // ✅ FIX: Default 50
+    const limit = parseInt(req.query.limit as string) || 50; 
 
     if (since) {
       const sinceDate = new Date(since);
-      // ✅ FIX: Usa $gte (maior ou igual) pra incluir a última msg (evita gaps)
+    
       query = { timestamp: { $gte: sinceDate } };
     }
 
-    // ✅ FIX: REMOVE populate (leve pra API, só populado no emit real-time)
+   
     const messages = await Message.find(query)
       .sort({ timestamp: 1 })
-      .limit(limit) // ✅ FIX: Aplica limit
+      .limit(limit)
       .lean(); 
     
     res.json(messages);
@@ -44,20 +46,35 @@ export const sendMessage = async (req: RequestWithFiles, res: Response) => {
 
   if (type === 'voice' && req.files?.audio) {
     const file = Array.isArray(req.files.audio) ? req.files.audio[0] : req.files.audio;
-    const uploadPath = path.join(__dirname, '../uploads', `${Date.now()}-${file.name}`);
 
     try {
-      await file.mv(uploadPath);
-      
-      const serverUrl = process.env.NODE_ENV === 'production' 
-        ? `https://${req.get('host')}` 
-        : `${req.protocol}://${req.get('host')}`;
-        
-      audioUri = `${serverUrl}/uploads/${path.basename(uploadPath)}`;
+     
+      const result = await new Promise<any>((resolve, reject) => {
+        cloudinary.v2.uploader.upload_stream(
+          { 
+            resource_type: 'video',
+            public_id: `chat-audio-${Date.now()}`,
+            folder: 'chat-audios',
+         
+            format: 'mp3',
+            audio_codec: 'mp3',
+            audio_frequency: 22050, 
+            bitrate: 64, 
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        ).end(file.data); // Usa buffer direto do express-fileupload
+      });
+
+      audioUri = result.secure_url; // URL segura e persistente
       audioDuration = parseInt(req.body.audioDuration, 10) || 0;
+      
+      console.log('✅ Áudio enviado para Cloudinary:', audioUri);
     } catch (e) {
-      console.error(e);
-      return res.status(500).json({ message: 'Error uploading audio file' });
+      console.error('❌ Erro no upload para Cloudinary:', e);
+      return res.status(500).json({ message: 'Error uploading audio file to Cloudinary' });
     }
   }
 
@@ -71,11 +88,11 @@ export const sendMessage = async (req: RequestWithFiles, res: Response) => {
       replyTo,
     });
     
-    // ✅ Populate SÓ pro emit (real-time precisa do objeto)
+
     const populatedForEmit = await Message.findById(message._id).populate('replyTo').lean();
     io.emit('newMessage', populatedForEmit);
 
-    // ✅ res.json SEM populate (leve pra API)
+   
     res.status(201).json(message.toObject());
   } catch (err) {
     console.error(err);
@@ -95,7 +112,7 @@ export const addReaction = async (req: Request, res: Response) => {
       ? JSON.parse(JSON.stringify(message.reactions))
       : {};
 
-    // ✅ Limpa reações antigas do usuário (toggle)
+   
     for (const [key, val] of Object.entries(reactions)) {
       if (Array.isArray(val)) {
         const filtered = val.filter((u: string) => u !== username);
@@ -121,11 +138,11 @@ export const addReaction = async (req: Request, res: Response) => {
     message.markModified('reactions');
     await message.save();
 
-    // ✅ Populate SÓ pro emit (real-time precisa do objeto)
+
     const populatedForEmit = await Message.findById(messageId).populate('replyTo').lean();
     io.emit('messageUpdated', populatedForEmit);
     
-    // ✅ res.json SEM populate (leve pra API)
+  
     res.json(message.toObject());
   } catch (err) {
     console.error('Erro ao adicionar reação:', err);

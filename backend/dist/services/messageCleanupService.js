@@ -44,12 +44,10 @@ class MessageCleanupService {
         this.cronJob = null;
     }
     start() {
-        // Executa todos os dias à meia-noite (00:00)
         this.cronJob = cron.schedule('0 0 * * *', () => __awaiter(this, void 0, void 0, function* () {
             yield this.cleanupOldMessages();
         }));
         console.log(' Serviço de limpeza automática iniciado (diário às 00:00)');
-        // Executa uma limpeza imediatamente ao iniciar
         this.cleanupOldMessages();
     }
     cleanupOldMessages() {
@@ -62,7 +60,6 @@ class MessageCleanupService {
                 });
                 if (result.deletedCount > 0) {
                     console.log(`🗑️ Limpeza automática: ${result.deletedCount} mensagens removidas (antes de ${sevenDaysAgo.toISOString()})`);
-                    // Notifica todos os clientes conectados
                     app_1.io.emit('messagesCleanup', {
                         deletedCount: result.deletedCount,
                         cutoffDate: sevenDaysAgo

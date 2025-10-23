@@ -1,9 +1,11 @@
+
 import express from 'express';
 import cors from 'cors';
 import fileUpload from 'express-fileupload';
 import path from 'path';
 import { Server } from 'socket.io';
 import http from 'http';
+import cloudinary from 'cloudinary';
 
 import authRoutes from './routes/authRoutes';
 import messageRoutes from './routes/messageRoutes';
@@ -22,6 +24,13 @@ export const io = new Server(server, {
   maxHttpBufferSize: 1e6, //  FIX: Pra msgs grandes
 });
 
+// ✅ CLOUDINARY: Configuração global
+cloudinary.v2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 app.use(cors({
   origin: process.env.CLIENT_URL || '*',
   credentials: true
@@ -34,17 +43,9 @@ app.use(fileUpload({
 }));
 
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-  setHeaders: (res, filepath) => {
-    if (filepath.endsWith('.m4a') || filepath.endsWith('.mp3')) {
-      res.setHeader('Content-Type', 'audio/mpeg');
-    }
-  }
-}));
 
 app.use('/api/auth', authRoutes);
 app.use('/api', messageRoutes);
-
 
 const onlineUsers = new Map<string, { 
   username: string; 

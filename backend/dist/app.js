@@ -7,9 +7,9 @@ exports.io = void 0;
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const express_fileupload_1 = __importDefault(require("express-fileupload"));
-const path_1 = __importDefault(require("path"));
 const socket_io_1 = require("socket.io");
 const http_1 = __importDefault(require("http"));
+const cloudinary_1 = __importDefault(require("cloudinary"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const messageRoutes_1 = __importDefault(require("./routes/messageRoutes"));
 const app = (0, express_1.default)();
@@ -24,6 +24,12 @@ exports.io = new socket_io_1.Server(server, {
     pingTimeout: 5000, // FIX: 5s timeout
     maxHttpBufferSize: 1e6, //  FIX: Pra msgs grandes
 });
+// ✅ CLOUDINARY: Configuração global
+cloudinary_1.default.v2.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 app.use((0, cors_1.default)({
     origin: process.env.CLIENT_URL || '*',
     credentials: true
@@ -32,13 +38,6 @@ app.use(express_1.default.json({ limit: '10mb' }));
 app.use((0, express_fileupload_1.default)({
     limits: { fileSize: 10 * 1024 * 1024 },
     abortOnLimit: true,
-}));
-app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, 'uploads'), {
-    setHeaders: (res, filepath) => {
-        if (filepath.endsWith('.m4a') || filepath.endsWith('.mp3')) {
-            res.setHeader('Content-Type', 'audio/mpeg');
-        }
-    }
 }));
 app.use('/api/auth', authRoutes_1.default);
 app.use('/api', messageRoutes_1.default);

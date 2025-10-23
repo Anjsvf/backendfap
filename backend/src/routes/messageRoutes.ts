@@ -1,3 +1,4 @@
+
 import express from 'express';
 import { protect } from '../middleware/authMiddleware';
 import {
@@ -15,7 +16,7 @@ router.post('/messages', protect, sendMessage);
 router.post('/messages/reaction', protect, addReaction);
 router.get('/users/online', protect, getOnlineUsers);
 
-// Novas rotas de limpeza
+
 router.post('/messages/cleanup', protect, cleanupOldMessages);
 router.get('/messages/stats', protect, getMessagesStats);
 

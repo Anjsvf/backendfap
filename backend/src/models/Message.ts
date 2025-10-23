@@ -1,4 +1,4 @@
-
+// models/Message.ts
 import mongoose, { Schema } from 'mongoose';
 import { Message as IMessage } from '../types';
 
@@ -8,7 +8,7 @@ const messageSchema = new Schema<IMessage>(
     text: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },
     type: { type: String, enum: ['text', 'voice'], default: 'text' },
-    audioUri: String,
+    audioUri: String, 
     audioDuration: Number,
     replyTo: { type: Schema.Types.ObjectId, ref: 'Message' },
     reactions: {

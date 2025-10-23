@@ -13,7 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOnlineUsers = exports.addReaction = exports.sendMessage = exports.getMessages = void 0;
-const path_1 = __importDefault(require("path"));
+const cloudinary_1 = __importDefault(require("cloudinary"));
 const Message_1 = __importDefault(require("../models/Message"));
 const User_1 = __importDefault(require("../models/User"));
 const app_1 = require("../app");
@@ -21,16 +21,14 @@ const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     try {
         let query = {};
         const since = req.query.since;
-        const limit = parseInt(req.query.limit) || 50; // ✅ FIX: Default 50
+        const limit = parseInt(req.query.limit) || 50;
         if (since) {
             const sinceDate = new Date(since);
-            // ✅ FIX: Usa $gte (maior ou igual) pra incluir a última msg (evita gaps)
             query = { timestamp: { $gte: sinceDate } };
         }
-        // ✅ FIX: REMOVE populate (leve pra API, só populado no emit real-time)
         const messages = yield Message_1.default.find(query)
             .sort({ timestamp: 1 })
-            .limit(limit) // ✅ FIX: Aplica limit
+            .limit(limit)
             .lean();
         res.json(messages);
     }
@@ -48,18 +46,30 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     let audioDuration;
     if (type === 'voice' && ((_a = req.files) === null || _a === void 0 ? void 0 : _a.audio)) {
         const file = Array.isArray(req.files.audio) ? req.files.audio[0] : req.files.audio;
-        const uploadPath = path_1.default.join(__dirname, '../uploads', `${Date.now()}-${file.name}`);
         try {
-            yield file.mv(uploadPath);
-            const serverUrl = process.env.NODE_ENV === 'production'
-                ? `https://${req.get('host')}`
-                : `${req.protocol}://${req.get('host')}`;
-            audioUri = `${serverUrl}/uploads/${path_1.default.basename(uploadPath)}`;
+            const result = yield new Promise((resolve, reject) => {
+                cloudinary_1.default.v2.uploader.upload_stream({
+                    resource_type: 'video',
+                    public_id: `chat-audio-${Date.now()}`,
+                    folder: 'chat-audios',
+                    format: 'mp3',
+                    audio_codec: 'mp3',
+                    audio_frequency: 22050,
+                    bitrate: 64,
+                }, (error, result) => {
+                    if (error)
+                        reject(error);
+                    else
+                        resolve(result);
+                }).end(file.data); // Usa buffer direto do express-fileupload
+            });
+            audioUri = result.secure_url; // URL segura e persistente
             audioDuration = parseInt(req.body.audioDuration, 10) || 0;
+            console.log('✅ Áudio enviado para Cloudinary:', audioUri);
         }
         catch (e) {
-            console.error(e);
-            return res.status(500).json({ message: 'Error uploading audio file' });
+            console.error('❌ Erro no upload para Cloudinary:', e);
+            return res.status(500).json({ message: 'Error uploading audio file to Cloudinary' });
         }
     }
     try {
@@ -71,10 +81,8 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             audioDuration,
             replyTo,
         });
-        // ✅ Populate SÓ pro emit (real-time precisa do objeto)
         const populatedForEmit = yield Message_1.default.findById(message._id).populate('replyTo').lean();
         app_1.io.emit('newMessage', populatedForEmit);
-        // ✅ res.json SEM populate (leve pra API)
         res.status(201).json(message.toObject());
     }
     catch (err) {
@@ -93,7 +101,6 @@ const addReaction = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         const reactions = message.reactions && typeof message.reactions === 'object'
             ? JSON.parse(JSON.stringify(message.reactions))
             : {};
-        // ✅ Limpa reações antigas do usuário (toggle)
         for (const [key, val] of Object.entries(reactions)) {
             if (Array.isArray(val)) {
                 const filtered = val.filter((u) => u !== username);
@@ -120,10 +127,8 @@ const addReaction = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         message.reactions = reactions;
         message.markModified('reactions');
         yield message.save();
-        // ✅ Populate SÓ pro emit (real-time precisa do objeto)
         const populatedForEmit = yield Message_1.default.findById(messageId).populate('replyTo').lean();
         app_1.io.emit('messageUpdated', populatedForEmit);
-        // ✅ res.json SEM populate (leve pra API)
         res.json(message.toObject());
     }
     catch (err) {
