@@ -24,18 +24,29 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const messageSchema = new mongoose_1.Schema({
-    username: { type: String, required: true },
-    text: { type: String, required: true },
-    timestamp: { type: Date, default: Date.now },
-    type: { type: String, enum: ['text', 'voice'], default: 'text' },
-    audioUri: String,
-    audioDuration: Number,
-    replyTo: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Message' },
-    reactions: {
-        type: Map,
-        of: [String],
-        default: new Map(),
+const userBadgeSchema = new mongoose_1.Schema({
+    username: {
+        type: String,
+        required: true,
+        unique: true,
+        index: true,
     },
-}, { minimize: false });
-exports.default = mongoose_1.default.model('Message', messageSchema);
+    currentBadge: {
+        type: {
+            key: String,
+            name: String,
+            days: Number,
+            category: String,
+        },
+        default: null,
+    },
+    currentStreak: {
+        type: Number,
+        default: 0,
+    },
+    lastUpdated: {
+        type: Date,
+        default: Date.now,
+    },
+});
+exports.default = mongoose_1.default.model('UserBadge', userBadgeSchema);

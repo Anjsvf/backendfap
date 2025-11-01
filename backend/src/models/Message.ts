@@ -1,4 +1,4 @@
-// models/Message.ts
+
 import mongoose, { Schema } from 'mongoose';
 import { Message as IMessage } from '../types';
 
